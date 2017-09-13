@@ -19,9 +19,8 @@ package org.voltdb.sqlparser.syntax.grammar;
 /**
  * This enumerated type is for quantifiers on select list elements.
  */
-public enum SetQuantifier {
+public enum SelectQueryQuantifier {
     ALL_QUANTIFIER,
-    DISTINCT_QUANTIFIER,
-    NO_QUANTIFIER
+    DISTINCT_QUANTIFIER
 };
 

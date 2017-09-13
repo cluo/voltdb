@@ -33,6 +33,26 @@ import org.voltdb.sqlparser.syntax.symtab.IType;
 public interface ISelectQuery {
 
     /**
+     * Add a set of order by keys to a query.
+     * @param aOrderByKeys
+     */
+    void addOrderBy(List<ISemantino> aOrderByKeys);
+    /**
+     * Add a limit to a query;
+     */
+    void addLimit(long aLimit);
+    /**
+     * Add an offset.
+     */
+    void addOffset(long aOffset);
+    /**
+     * Convert a string into an integer.
+     */
+    long convertConstantIntegerConstant(String aConstant);
+    /**
+     * FENCE.
+     */
+    /**
      * Add a projection.  This is a select list element.
      *
      * @param aTableName
@@ -103,7 +123,7 @@ public interface ISelectQuery {
      */
     String getNextDisplayAlias();
 
-    void setQuantifier(SetQuantifier q);
+    void setQuantifier(SelectQueryQuantifier q);
 
     boolean isSimpleTable();
 
@@ -112,4 +132,15 @@ public interface ISelectQuery {
     ISelectQuery getLeftQuery();
 
     ISelectQuery getRightQuery();
+
+    /**
+     * Return the join condition of the current table_reference in the
+     * select list.
+     */
+    IJoinTree getJoinCondition();
+    /**
+     * Set the join condition for the current table_reference.
+     * @param aCondition
+     */
+    void setJoinCondition(IJoinTree aCondition);
 }

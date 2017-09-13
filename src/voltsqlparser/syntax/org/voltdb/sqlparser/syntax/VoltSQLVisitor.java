@@ -39,7 +39,8 @@ import org.voltdb.sqlparser.syntax.grammar.IStringType;
 import org.voltdb.sqlparser.syntax.grammar.QuerySetOp;
 import org.voltdb.sqlparser.syntax.grammar.SQLParserBaseVisitor;
 import org.voltdb.sqlparser.syntax.grammar.SQLParserParser;
-import org.voltdb.sqlparser.syntax.grammar.SetQuantifier;
+import org.voltdb.sqlparser.syntax.grammar.SQLParserParser.Join_operatorContext;
+import org.voltdb.sqlparser.syntax.grammar.SelectQueryQuantifier;
 import org.voltdb.sqlparser.syntax.symtab.IColumn;
 import org.voltdb.sqlparser.syntax.symtab.IExpressionParser;
 import org.voltdb.sqlparser.syntax.symtab.IParserFactory;
@@ -500,14 +501,7 @@ public class VoltSQLVisitor<T> extends SQLParserBaseVisitor<T> implements ANTLRE
      */
     @Override
     public T visitQuery_specification(SQLParserParser.Query_specificationContext ctx) {
-        SetQuantifier q = SetQuantifier.NO_QUANTIFIER;
-        if (ctx.set_quantifier() != null) {
-            if (ctx.set_quantifier().ALL() != null) {
-                q = SetQuantifier.ALL_QUANTIFIER;
-            } else if (ctx.set_quantifier().DISTINCT() != null) {
-                q = SetQuantifier.DISTINCT_QUANTIFIER;
-            }
-        }
+        SelectQueryQuantifier q = ctx.set_quantifier().quantifier;
         getTopSelectQuery().setQuantifier(q);
         // We have to visit the table expression before the
         // select list, because the select list will have references
@@ -515,6 +509,31 @@ public class VoltSQLVisitor<T> extends SQLParserBaseVisitor<T> implements ANTLRE
         visitTable_expression(ctx.table_expression());
         visitSelect_list(ctx.select_list());
         return m_state;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The default implementation returns the result of calling
+     * {@link #visitChildren} on {@code ctx}.</p>
+     */
+    @Override
+    public T visitTable_reference(SQLParserParser.Table_referenceContext ctx) {
+        assert(ctx.table_factor(0) != null);
+        visitTable_factor(ctx.table_factor(0));
+        if (ctx.join_operator() == null) {
+            assert(ctx.join_condition() == null);
+        } else {
+            assert(ctx.join_operator().size() == ctx.join_condition().size());
+            for (int idx = 0; idx < ctx.join_operator().size(); idx += 1) {
+                ISelectQuery query = getTopSelectQuery();
+                query.setJoinCondition(
+                        m_factory.newJoinTree(ctx.join_operator(idx).operator,
+                                              query.getJoinCondition(),
+                                              ctx.join_condition(idx).semantino));
+
+            }
+        return visitChildren(ctx);
     }
 
     /**

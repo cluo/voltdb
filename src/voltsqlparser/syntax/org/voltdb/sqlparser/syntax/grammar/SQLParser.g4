@@ -376,27 +376,38 @@ insert_select:
  *
  * Apparently the LIMIT and OFFSET are not standard.
  */
-cursor_specification:
+cursor_specification returns [ ISelect query ]:
         query_expression
-        ( order_by_clause )?
-        ( limit_clause )?
-        ( offset_clause )?
+        { query = query_expression.query; }
+        ( order_by_clause 
+            { query.addOrderBy(order_by_clause.answer); }
+        )?
+        ( limit_clause 
+            { query.addLimit(limit_clause.answer); }
+        )?
+        ( offset_clause 
+            { query.addOffset(offset_clause.answer); }
+        )?
     ;
 
-order_by_clause:
+order_by_clause returns [List<ISemantino> answer]:
         ORDER BY sort_specification_list
+        { answer = sort_specification_list.answer; }
     ;
 
-limit_clause:
+limit_clause returns [ long answer ]:
 		LIMIT constant_value_expression
+		{ answer = m_factory.convertConstantIntegerExpression(constant_value_expression.text); }
 	;
 	
-offset_clause:
+offset_clause returns [ long answer ]:
 		OFFSET constant_value_expression
+		{ answer = m_factory.convertConstantIntegerExpression(constant_value_expression.text); }
 	;
 
-query_expression:
+query_expression returns [ ISelect query ]:
         query_expression_body
+        { query = query_expression_body.answer; }
     ;
 
 with_clause:
@@ -408,46 +419,67 @@ with_clause:
 // the precedence right.  We lean on Antlr to bind
 // intersection more tightly than union/except.
 //
-query_expression_body:
+query_expression_body returns [ISelect query]:
         query_primary
+        { query = query_primary.query; }
     |
-    	query_expression_body query_intersect_op query_expression_body
+    	left=query_expression_body op=query_intersect_op right=query_expression_body
+    	{ query = m_factory.makeCompoundQuery(op.setop, left.query, right.query); }
     |
-        query_expression_body query_union_op query_expression_body 
+        left=query_expression_body op=query_union_op right=query_expression_body
+        { query = m_factory.makeCompoundQuery(intersect_op.setop, left.query, right.query); }
     ;
 
-query_union_op:
-        ( UNION ( ALL )? ) 
-    | 
+query_union_op returns [ QuerySetOp op ]:
+        ( UNION 
+        { op = QuerySetOp.UNION_OP; }
+           ( ALL { op = QuerySetOp.UNION_ALL_OP; } )?
+        )
+    |
     	EXCEPT
+    	{ op = QuerySetOp.EXCEPT_OP; }
     ;
 
 query_intersect_op:
 		INTERSECT
+		{ op = QuerySetOp.INTERSECT_OP; }
 	;
 
-query_primary:
+query_primary returns [ISelect query]:
         simple_table
+        { query = simple_table.query; }
     |
         '(' query_expression_body ')'
+        { query = query_expression_body.query; }
     ;
 
-simple_table:
+simple_table returns [ISelect query]:
         query_specification
+        { query = query_specification.query; }
     |
         explicit_table
+        { query = explicit_table.query; }
     ;
 
-explicit_table:
+explicit_table returns [ISelect query]:
         TABLE table_or_query_name
+        { query = m_factory.makeErrorQuery(); }   
     ;
 
-query_specification:
-        SELECT ( set_quantifier )? select_list table_expression
+query_specification returns [ ISelect query ]:
+        /* Note: set_quantifier can be empty, so it's optional. */
+        SELECT set_quantifier select_list table_expression
     ;
 
-set_quantifier:
-        ALL | DISTINCT
+set_quantifier returns [SelectQueryQuantifier quantifier]:
+        ALL
+        { quantifier = SelectQueryQuantifier.ALL_QUANTIFIER; } 
+    |
+        DISTINCT
+        { quantifier = SelectQueryQuantifier.DISTINCT_QUANTIFIER; }
+    |
+        /* empty */
+        { quantifier = SelectQueryQuantifier.ALL_QUANTIFIER; }
     ;
 
 select_list:
@@ -470,16 +502,31 @@ derived_column:
         value_expression ( AS column_alias_name )?
     ;
 
-sort_specification_list:
-        sort_specification (',' sort_specification)*
+sort_specification_list returns [ List<ISortSemantino> answer]:
+        sortspecs += sort_specification (',' sortspecs += sort_specification)*
+        { answer = new ArrayList<ISortSemantino>();
+          for (Sort_specification_context sortspec : sortspecs) {
+              answer.add(sortspec.answer);
+          }
+        }
     ;
 
-sort_specification:
-        sort_key ( ordering_specification )? ( null_ordering )?
+sort_specification returns [ ISortSemantino answer ]:
+        sort_key
+        { answer = m_factory.makeSortSemantino(sort_key.answer); } 
+        ( 
+            ordering_specification
+            { answer.setSortOrder(ordering_specification.answer); } 
+        )? 
+        ( 
+            null_ordering
+            { answer.setSortOrder(ordering_specification.answer); }
+        )?
     ;
 
-sort_key:
+sort_key returns [ISemantino answer]:
         value_expression
+        { answer = value_expression.answer; }
     ;
 
 ordering_specification:
@@ -524,11 +571,17 @@ derived_table:
 		table_subquery
 	;
 
-join_operator:
+join_operator returns [JoinOperator operator]:
         (
             ( INNER )?
+            { $operator = JoinOperator.INNER_JOIN; }
          |
-            ( LEFT | RIGHT | FULL )
+            ( LEFT { $operator = JoinOperator.LEFT_OUTER_JOIN; }
+                | 
+              RIGHT { $operator = JoinOperator.RIGHT_OUTER_JOIN; } 
+                | 
+              FULL  { $operator = JoinOperator.LEFT_OUTER_JOIN; }
+            )
             ( OUTER )?
         )
         JOIN
@@ -642,37 +695,54 @@ datatype:
 /*************************************************************************
  * Expressions.
  *************************************************************************/
-value_expression:
-                '(' value_expression ')'                #null_expr
+value_expression returns [ ISemantino answer ]:
+                '(' value_expression ')'
+                { answer = value_expression.answer; }
         |
-                value_expression mop=timesop value_expression  #times_expr
+                left=value_expression top=timesop right=value_expression
+                { answer = m_factory.makeBinOp(op.answer, left.answer, right.answer); } 
         |
-                value_expression sop=addop value_expression    #add_expr
+                left=value_expression sop=addop right=value_expression
+                { answer = m_factory.makeBinOp(op.answer, left.answer, right.answer); }
         |
-                value_expression rop=relop value_expression    #rel_expr
+                left=value_expression rop=relop right=value_expression
+                { answer = m_factory.makeBinOp(op.answer, left.answer, right.answer); }
         |
-                NOT value_expression                    #not_expr
+                NOT left=value_expression
+                { 
+                    answer = m_factory.makeUnaryOp(m_factory.getNotExpressionOperator(),
+                                                   left.answer);
+                                                 
+                }
         |
-                value_expression cop=AND value_expression          #conjunction_expr
+                left=value_expression bop=AND right=value_expression
+                {
+                    answer = m_factory.makeBinOp(m_factory.getAndExpressionOperator(),
+                                                 left.answer,
+                                                 right.answer);
+                }
         |
-                value_expression dop=OR value_expression          #disjunction_expr
+                left=value_expression bop=OR right=value_expression
+                {
+                    answer = m_factory.makeBinOp(m_factory.getOrExpressionOperator(),
+                                                 left.answer,
+                                                 right.answer);
+                }
         |
-                boolconst=TRUE                    #true_expr
+                boolconst=TRUE
         |
-                boolconst=FALSE                   #false_expr
+                boolconst=FALSE
         |
-                col=column_reference              #colref_expr
+                col=column_reference
         |
-                num=NUMBER                        #numeric_expr
+                num=NUMBER
         |
-        		str=STRING	                      #string_expr
+        		str=STRING
         |
         		scalar_function_name '(' ( value_expression (',' value_expression )* )? ')'
-        		                                  #scalar_function
         |
         		aggregate_function_name '(' ( value_expression ( ',' value_expression )? )? ')'
         		( OVER window_ref )
-        										  #aggregate_function
        	//
        	// There are some other time/date functions with
        	// eccentric syntax which need to be put here.

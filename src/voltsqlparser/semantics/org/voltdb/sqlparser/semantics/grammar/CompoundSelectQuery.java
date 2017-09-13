@@ -25,7 +25,7 @@ import org.voltdb.sqlparser.syntax.grammar.ISelectQuery;
 import org.voltdb.sqlparser.syntax.grammar.ISemantino;
 import org.voltdb.sqlparser.syntax.grammar.Projection;
 import org.voltdb.sqlparser.syntax.grammar.QuerySetOp;
-import org.voltdb.sqlparser.syntax.grammar.SetQuantifier;
+import org.voltdb.sqlparser.syntax.grammar.SelectQueryQuantifier;
 import org.voltdb.sqlparser.syntax.symtab.IAST;
 import org.voltdb.sqlparser.syntax.symtab.IExpressionParser;
 import org.voltdb.sqlparser.syntax.symtab.ISourceLocation;
@@ -197,7 +197,7 @@ public class CompoundSelectQuery implements ISelectQuery, IDQLStatement {
     }
 
     @Override
-    public void setQuantifier(SetQuantifier q) {
+    public void setQuantifier(SelectQueryQuantifier q) {
         assert(false);
     }
 

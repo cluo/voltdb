@@ -5,7 +5,6 @@ import org.voltdb.sqlparser.semantics.symtab.ParserFactory;
 import org.voltdb.sqlparser.syntax.VoltSQLState;
 import org.voltdb.sqlparser.syntax.VoltSQLVisitor;
 import org.voltdb.sqlparser.syntax.grammar.IInsertStatement;
-import org.voltdb.sqlparser.syntax.grammar.ISelectQuery;
 import org.voltdb.sqlparser.syntax.grammar.ISemantino;
 import org.voltdb.sqlparser.syntax.symtab.IAST;
 
@@ -47,13 +46,6 @@ public class VoltDDLVisitor extends VoltSQLVisitor<VoltSQLState> {
      */
     private VoltXMLElement getVoltXML(IInsertStatement aInsertStatement) {
         assert(aInsertStatement instanceof InsertStatement);
-        return (VoltXMLElement)getFactory().makeInsertAST((InsertStatement)aInsertStatement);
-    }
-
-    private VoltXMLElement getVoltXML(ISelectQuery qstat) {
-        return (VoltXMLElement)getFactory().makeQueryAST(qstat.getProjections(),
-                                                         qstat.getWhereCondition(),
-                                                         qstat.getTables());
-
+        return (VoltXMLElement)getFactory().makeInsertAST(aInsertStatement);
     }
 }
